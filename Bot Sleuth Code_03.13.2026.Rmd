@@ -13,8 +13,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # This is a test message for Michelle to see if my push worked!
 
-
-
 ```{r}
 # Packages
 library(httr)
@@ -261,8 +259,6 @@ results_ipinfo
 ```
 
 ### Free IP API
-
-# *NOTE 2:* This one wasn't working for a lot of cases in STARPower data. Maybe double-check request limits? 
 
 No Key - limited to 60 request/min 
 
