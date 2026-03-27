@@ -164,8 +164,6 @@ ip_data_list
 
 ## APIs
 
-# **NOTE*: Since most of these have request limits, woudl be great to update this one to add a loop or something with some sort of time delay so you don't have to do a new iteration for each 60. But not sure exactly how to do this.
-
 ### IP-API 
 
 Batch lookup on ip-api (100 per request per ip-api free docs)
@@ -314,21 +312,6 @@ results_freeipapi <- purrr::map_dfr(chunks, \(ch) {
   )
 })
 results_freeipapi
-
-# # run lookup
-# results_freeipapi <- lookup_freeipapi_bulk(ip_data$query)
-# results_freeipapi
-# 
-# # run next set if stopped at 60
-# ## create list of missing ip address rows
-# missing_ips <- results_freeipapi$query[is.na(results_freeipapi$capital)]
-# 
-# ## run look up for next set
-# new_results <- lookup_freeipapi_bulk(missing_ips)
-# # new_results <- lookup_freeipapi_bulk_chunked(missing_ips)
-
-## combine lists
-# results_freeipapi <- dplyr::rows_update(results_freeipapi, new_results, by = "query")
 ```
 
 ### IP Query
@@ -351,6 +334,7 @@ results_ip_query
 results_ip_query <- do.call(data.frame, results_ip_query)
 results_ip_query <- results_ip_query %>% rename(query = ip)
 ```
+**Note:** Having issue here where I get an error when running all together, but when I sepcifically run this chunk it works
 
 ## Combine all results
 
@@ -423,6 +407,11 @@ Need to add checking the fields in some of these that identify hosting/data cent
 
 ```{r}
 combined_results %>% select(ipapi_regionName,ipinfo_region,ipquery_location.state)
+
+combined_results %>% select(freeipapi_countryCode,
+ipquery_location.country_code,
+ipapi_countryCode,
+ipinfo_country)
 ```
 
 # Need to standardize the country values
@@ -439,7 +428,7 @@ ipinfo_country is equivalent to the country codes for the other lookup sites.
 # suspicious location flag
 combined_results <- combined_results |>
   mutate(
-    geo_outside_japan = (ipapi_country != "Japan" | ipinfo_country != "Japan" | ipquery_location.country != "Japan"),
+    geo_outside_japan = (freeipapi_countryCode != "JP" | ipquery_location.country_code != "JP" | ipapi_countryCode != "JP" | ipinfo_country != "JP"),
     geo_disagree_region = (ipapi_regionName != ipinfo_region |
                       ipapi_regionName != ipquery_location.state | # seems kind of equivalent but not quite the same
                                             ipinfo_region != ipquery_location.state),
@@ -447,11 +436,16 @@ combined_results <- combined_results |>
   geo_disagree_city = (
                       ipapi_city != ipinfo_city | 
                       ipapi_city != ipquery_location.city | 
-                      ipinfo_city != ipquery_location.city))
+                      ipinfo_city != ipquery_location.city |
+                        freeipapi_cityName != ipapi_city |
+                        freeipapi_cityName != ipinfo_city |
+                        freeipapi_cityName != ipquery_location.city))
 
-combined_results %>% select(geo_outside_us,ipapi_country,ipinfo_country,ipquery_location.country) # in this instance, all of these are getting flagged
+combined_results %>% select(geo_outside_japan,ipapi_country,ipinfo_country,ipquery_location.country) # in this instance, all of these are getting flagged
 
 combined_results %>% select(geo_disagree_region,ipapi_regionName,ipinfo_region,ipquery_location.state)
+
+combined_results %>% select(geo_disagree_city,ipapi_city,ipinfo_city,ipquery_location.city,freeipapi_cityName)
 
 isp_counts <- bind_rows(
   combined_results |> count(ipapi_isp,  name = "n") |> rename(isp = ipapi_isp) |> mutate(source = "ipapi"),
@@ -461,6 +455,8 @@ isp_counts
 ```
 
 **AC note:** A lot of the regions differ and are getting flagged. This is okay, but maybe should create count variables indicating whether there are discrepancies between 2 of the region variables, or all 3, etc. Either way, should definitely note that people should use caution with this.
+
+**Also, one example of "Chiyoda City" where it's the same but with more characters. Maybe do a grep to look for presence of strings instead**
 
 ### Without flagging by city
 
