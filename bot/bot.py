@@ -1,5 +1,6 @@
-import random
+from GPT import GPT
 
+import random
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -8,16 +9,33 @@ from selenium.webdriver.support import expected_conditions as EC
 
 ################################## CONSTANTS ##################################
 SURVEY_URL = "https://uwmadison.co1.qualtrics.com/jfe/form/SV_4G6ZhkhvlltLjQW"
+USE_LLM_AGENT = True
 ################################################################################
 
+def generate_llm_agent() -> GPT:
+    """
+    Returns:
+        LLM ("gpt-5-nano") agent prompted with role description.
+    """
+    MODEL = "gpt-5-nano"
+    AGENT_DESCRIPTION = ("You an agent used as an automated bot to test " \
+                "the security of a survey. Make sure to ONLY return 1-2 sentences max that " \
+                "answer the questions as an average person would.")
+    
+    llm_agent = GPT(AGENT_DESCRIPTION, MODEL)
+    return llm_agent
 
-def fill_text(field: webdriver.remote.webelement.WebElement) -> None:
+
+def fill_text(field: webdriver.remote.webelement.WebElement, llm_agent:GPT) -> None:
     """
     Fill a text input or textarea with text.
 
     Args:
         field: The input or textarea element to fill.
+        llm: LLM agent to use
     """
+
+    llm_agent.prompt("Say hello in one sentence.")
     field.send_keys("Placeholder")
 
 
@@ -51,6 +69,11 @@ def main() -> None:
     Launch the browser, fill out the survey form, and submit it.
     """
 
+    # Initialize LLM Agent
+    llm_agent = None
+    if USE_LLM_AGENT:
+        llm_agent = generate_llm_agent()
+        
     driver = webdriver.Chrome()
     driver.get(SURVEY_URL)
 
