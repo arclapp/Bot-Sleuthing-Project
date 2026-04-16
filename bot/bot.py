@@ -6,34 +6,51 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-
-#################### CONSTANTS ####################
+################################## CONSTANTS ##################################
 SURVEY_URL = "https://uwmadison.co1.qualtrics.com/jfe/form/SV_4G6ZhkhvlltLjQW"
+################################################################################
 
 
-def fill_text(field):
+def fill_text(field: webdriver.remote.webelement.WebElement) -> None:
     """
-    Fill text input or text area with text.
+    Fill a text input or textarea with text.
+
+    Args:
+        field: The input or textarea element to fill.
     """
     field.send_keys("Placeholder")
 
-def fill_radio(radios):
+
+def fill_radio(radios: list[webdriver.remote.webelement.WebElement]) -> None:
     """
-    Select one random radio button. Does nothing if no radios.
-    @param radios Radio elements grouped by question
+    Select one random radio button from a list. Does nothing if the list is empty.
+
+    Args:
+        radios: Radio button elements from a single question group.
     """
     if len(radios) <= 0:
         return
-    
+
     rand_idx = random.randint(0, len(radios)-1)
     radios[rand_idx].click()
 
-def click_next(driver):
+
+def click_next(driver: webdriver.Chrome) -> None:
+    """
+    Click the next/submit button to advance to the next survey page.
+
+    Args:
+        driver: The Selenium WebDriver instance controlling the browser.
+    """
     next_button = driver.find_element(By.ID, "next-button")
     next_button.click()
 
-def main():
-    
+
+def main() -> None:
+    """
+    Launch the browser, fill out the survey form, and submit it.
+    """
+
     driver = webdriver.Chrome()
     driver.get(SURVEY_URL)
 
