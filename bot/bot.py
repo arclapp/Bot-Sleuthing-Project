@@ -1,10 +1,13 @@
 from GPT import GPT
 
 import random
+from typing import Union, Callable
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException
 
 
 ################################## CONSTANTS ##################################
@@ -26,17 +29,39 @@ def generate_llm_agent() -> GPT:
     return llm_agent
 
 
-def fill_text(field: webdriver.remote.webelement.WebElement, llm_agent:GPT) -> None:
+# def fill_text(field: webdriver.remote.webelement.WebElement, question:str, llm_agent:GPT) -> None:
+#     """
+#     Fill a text input or textarea with text generated using LLM. If question
+#     or llm_agent are None, defaults to filling with "Placeholder"
+
+#     Args:
+#         field: The input or textarea element to fill.
+#         question: Question statement associated with text field. 
+#         llm: LLM agent to use
+#     """
+#     if not field:
+#         return
+
+#     field_text = "Placeholder"
+#     if question and llm_agent:
+#         field_text = llm_agent.prompt(question)
+#         print("LLM:", field_text)
+    
+#     field.send_keys(field_text)
+
+def fill_text(field: webdriver.remote.webelement.WebElement, text:str) -> None:
     """
     Fill a text input or textarea with text.
 
     Args:
         field: The input or textarea element to fill.
-        llm: LLM agent to use
+        question: Question statement associated with text field. 
+        text: Text to fill into the field
     """
-
-    llm_agent.prompt("Say hello in one sentence.")
-    field.send_keys("Placeholder")
+    if not field:
+        return
+    
+    field.send_keys(text)
 
 
 def fill_radio(radios: list[webdriver.remote.webelement.WebElement]) -> None:
@@ -64,6 +89,33 @@ def click_next(driver: webdriver.Chrome) -> None:
     next_button.click()
 
 
+def loop_through_elements(root: Union[webdriver.remote.webdriver.WebDriver, webdriver.remote.webelement.WebElement], 
+                          css_selector:str, fn: Callable, *args, **kwargs):
+    """
+    Loops through elements while preventing stale element reference. For each element found, applies 
+    the provided function `fn`, passing the element as the first argument followed by any 
+    additional positional and keyword arguments.
+
+    Args:
+        root (WebDriver | WebElement): The search context to locate elements within (e.g., the browser
+            driver or a parent DOM element).
+        css_selector: CSS selector used to locate target elements within the root.
+        fn: Function to apply to each element. Must accept the element as its
+            first parameter.
+        *args/**kwargs: Additional positional/keyword arguments passed to `fn`.
+    """
+    elements = root.find_elements(By.CSS_SELECTOR, css_selector)
+
+    for i in range(len(elements)):
+
+        # Re-fetch fresh element
+        fresh_elements = root.find_elements(By.CSS_SELECTOR, css_selector)
+        elem = fresh_elements[i]
+
+        fn(elem, *args, **kwargs)
+
+
+
 def main() -> None:
     """
     Launch the browser, fill out the survey form, and submit it.
@@ -79,25 +131,39 @@ def main() -> None:
 
     wait = WebDriverWait(driver, 10)
 
-    # Fill text inputs
-    text_inputs = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "input.text-input")))
-    text_areas = driver.find_elements(By.CSS_SELECTOR, "textarea.text-input")
 
-    for field in text_inputs + text_areas:
-        fill_text(field)
+    while True:
 
-    # Group radios by questions
-    questions = driver.find_elements(By.CSS_SELECTOR, "section.question")
-    for q in questions:
-        radios_per_q = q.find_elements(By.CSS_SELECTOR, "input[type='radio']")
+        questions = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "section.question")))
+        for i in range(len(questions)):
+            q = driver.find_elements(By.CSS_SELECTOR, "section.question")[i]
+            q_text = q.find_element(By.CSS_SELECTOR, ".question-display").text
+            print("QUESTIONS", q_text)
 
-        fill_radio(radios_per_q)
+            # Agent response to question
+            agent_response = "PLACEHOLDER"
+            text_inputs = q.find_elements(By.CSS_SELECTOR, "input.text-input, textarea.text-input")
+            if text_inputs:                                                                                                                                                                                           
+                agent_response = llm_agent.prompt(q_text)                                       
+                print("ANSWER:", agent_response)                                                                                                                                                                      
+            
+            # Refresh so not stale
+            q = driver.find_elements(By.CSS_SELECTOR, "section.question")[i]
+            loop_through_elements(q, "input.text-input", fill_text, agent_response)                                                                                                                               
+            loop_through_elements(q, "textarea.text-input", fill_text, agent_response)  
+
+            # Group radios by questions
+            radios_per_q = q.find_elements(By.CSS_SELECTOR, "input[type='radio']")
+            fill_radio(radios_per_q)
 
 
-    input("Press Enter to submit the form...")
+        input("Press Enter to move to the next page")
+        try:
+            click_next(driver)
+        except:
+            print("Reached end of survey")
+            break
 
-    # Submit form
-    click_next(driver)
 
     input("Press Enter to close browser...")
 
