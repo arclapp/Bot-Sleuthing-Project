@@ -1,14 +1,7 @@
 import os
-import re
-import json
-from planning.llm.llm import LLM
 from typing import Optional, List, Dict
 from dotenv import load_dotenv
-
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
+from openai import OpenAI
 
 class GPT():
     def __init__(self, role_description:str, model: Optional[str] = None):
@@ -37,7 +30,29 @@ class GPT():
 
         self._client = OpenAI(api_key=api_key)
     
-    
+    def history(self, include_fewshot:bool = False) -> list[dict]:
+        """
+        Return the chat history.
+
+        Args:
+            include_fewshot (bool): Whether to include few-shot examples in
+                the returned history. Defaults to False.
+
+        Returns:
+            list[dict]: The conversation history in the format:
+                [{"role": "", "content": ""}, ...]
+        """
+
+        if include_fewshot:
+            return list(self._chat_history)
+
+        filtered: List[Dict] = []
+        for msg in self._chat_history:
+            if msg.get("fewshot", False):
+                continue
+            filtered.append(msg)
+        return filtered
+
 
     def prompt(self, input:str) -> str:
         """
@@ -62,12 +77,12 @@ class GPT():
         resp = self._client.chat.completions.create(**params)
         reply = resp.choices[0].message.content or ""
 
-        if self._save_history:
-            self._chat_history.append(user_msg)
-            self._chat_history.append({
-                "role": "assistant",
-                "content": reply,
-            })
+
+        self._chat_history.append(user_msg)
+        self._chat_history.append({
+            "role": "assistant",
+            "content": reply,
+        })
 
         return reply
 
