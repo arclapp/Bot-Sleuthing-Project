@@ -60,8 +60,26 @@ def fill_radio(radios: list[webdriver.remote.webelement.WebElement]) -> None:
     rand_idx = random.randint(0, len(radios)-1)
     radios[rand_idx].click()
 
+def fill_slider(slider: list[webdriver.remote.webelement.WebElement], driver:webdriver.remote.webdriver.WebDriver) -> None:
+    """
+    Select random slider value (between min and max)
 
-def click_next(driver: webdriver.Chrome) -> None:
+    Args:
+        radios: Slider element
+    """
+    min_val = int(slider.get_attribute("min"))
+    max_val = int(slider.get_attribute("max"))
+
+    rand_val = random.randint(min_val, max_val)
+
+    driver.execute_script("arguments[0].value = arguments[1];", slider, rand_val)
+    driver.execute_script(
+        "arguments[0].dispatchEvent(new Event('input', {bubbles: true})); "
+        "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+        slider
+    )     
+
+def click_next(driver: webdriver.remote.webdriver.WebDriver  ) -> None:
     """
     Click the next/submit button to advance to the next survey page.
 
@@ -115,18 +133,19 @@ def main() -> None:
 
     wait = WebDriverWait(driver, 10)
 
-    QUESTION_SECTION_SELECTOR = 'section[id^="question-"]'
-    QUESTION_TEXT_SELECTOR = 'div[id^="question-display-"]'
+    
+    
+    
     while True:
         time.sleep(1)
-        print("HERE1")
+
         soup = BeautifulSoup(driver.page_source, "html.parser")
         with open("survey_page.html", "w", encoding="utf-8") as f:
             f.write(soup.prettify())   
 
-        
+        QUESTION_SECTION_SELECTOR = "section[id^='question-']"
         wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, QUESTION_SECTION_SELECTOR)))
-        print("HERE2")
+
         # Iterate through all questions (handles branching)
         i = -1
         while True:
@@ -135,14 +154,14 @@ def main() -> None:
             if i >= len(questions):
                 break
             q = questions[i]
-            print("HERE3")
-            
 
+            
+            QUESTION_TEXT_SELECTOR = "div[id^='question-display-']"
             q_text_els = q.find_elements(By.CSS_SELECTOR, QUESTION_TEXT_SELECTOR)
             if not q_text_els:
                 continue
             q_text = q_text_els[0].text
-            print("QUESTIONS", q_text)
+
 
             # Agent response to question
             agent_response = "PLACEHOLDER"
@@ -156,9 +175,20 @@ def main() -> None:
             loop_through_elements(q, "input.text-input", fill_text, agent_response)
             loop_through_elements(q, "textarea.text-input", fill_text, agent_response)
 
-            # Group radios by questions
-            radios_per_q = q.find_elements(By.CSS_SELECTOR, "input[type='radio']")
-            fill_radio(radios_per_q)
+            # Group radios by rows if matrix, else by question
+            QUESTION_RADIO_SELECTOR = "input[type='radio']"
+            rows = q.find_elements(By.CSS_SELECTOR, ".matrix-row")                                                                                                                                                                                                                                            
+            if rows:                                                                                                                                                                                                                                                                                          
+                for row in rows:
+                    fill_radio(row.find_elements(By.CSS_SELECTOR, QUESTION_RADIO_SELECTOR))                                                                                                                                                                                                                     
+            else:                                                                                                                                                                                                                                                                                           
+                fill_radio(q.find_elements(By.CSS_SELECTOR, QUESTION_RADIO_SELECTOR))
+
+            # Get slider
+            slider = q.find_elements(By.CSS_SELECTOR, "input[type='range']")
+            if slider:
+                slider = slider[0]
+                fill_slider(slider, driver)
 
 
 
