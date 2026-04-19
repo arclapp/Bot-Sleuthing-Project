@@ -168,7 +168,6 @@ def main() -> None:
             text_inputs = q.find_elements(By.CSS_SELECTOR, "input.text-input, textarea.text-input")
             if text_inputs:
                 agent_response = llm_agent.prompt(q_text)
-                print("ANSWER:", agent_response)
             
             # Refresh so not stale
             q = [q for q in driver.find_elements(By.CSS_SELECTOR, QUESTION_SECTION_SELECTOR) if q.is_displayed()][i]
