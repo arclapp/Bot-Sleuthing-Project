@@ -2,12 +2,14 @@ from GPT import GPT
 
 import random
 from typing import Union, Callable
+import time
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException
+from bs4 import BeautifulSoup
 
 
 ################################## CONSTANTS ##################################
@@ -29,25 +31,6 @@ def generate_llm_agent() -> GPT:
     return llm_agent
 
 
-# def fill_text(field: webdriver.remote.webelement.WebElement, question:str, llm_agent:GPT) -> None:
-#     """
-#     Fill a text input or textarea with text generated using LLM. If question
-#     or llm_agent are None, defaults to filling with "Placeholder"
-
-#     Args:
-#         field: The input or textarea element to fill.
-#         question: Question statement associated with text field. 
-#         llm: LLM agent to use
-#     """
-#     if not field:
-#         return
-
-#     field_text = "Placeholder"
-#     if question and llm_agent:
-#         field_text = llm_agent.prompt(question)
-#         print("LLM:", field_text)
-    
-#     field.send_keys(field_text)
 
 def fill_text(field: webdriver.remote.webelement.WebElement, text:str) -> None:
     """
@@ -121,6 +104,7 @@ def main() -> None:
     Launch the browser, fill out the survey form, and submit it.
     """
 
+
     # Initialize LLM Agent
     llm_agent = None
     if USE_LLM_AGENT:
@@ -131,30 +115,52 @@ def main() -> None:
 
     wait = WebDriverWait(driver, 10)
 
-
+    QUESTION_SECTION_SELECTOR = 'section[id^="question-"]'
+    QUESTION_TEXT_SELECTOR = 'div[id^="question-display-"]'
     while True:
+        time.sleep(1)
+        print("HERE1")
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        with open("survey_page.html", "w", encoding="utf-8") as f:
+            f.write(soup.prettify())   
 
-        questions = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "section.question")))
-        for i in range(len(questions)):
-            q = driver.find_elements(By.CSS_SELECTOR, "section.question")[i]
-            q_text = q.find_element(By.CSS_SELECTOR, ".question-display").text
+        
+        wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, QUESTION_SECTION_SELECTOR)))
+        print("HERE2")
+        # Iterate through all questions (handles branching)
+        i = -1
+        while True:
+            i += 1
+            questions = [q for q in driver.find_elements(By.CSS_SELECTOR, QUESTION_SECTION_SELECTOR) if q.is_displayed()]
+            if i >= len(questions):
+                break
+            q = questions[i]
+            print("HERE3")
+            
+
+            q_text_els = q.find_elements(By.CSS_SELECTOR, QUESTION_TEXT_SELECTOR)
+            if not q_text_els:
+                continue
+            q_text = q_text_els[0].text
             print("QUESTIONS", q_text)
 
             # Agent response to question
             agent_response = "PLACEHOLDER"
             text_inputs = q.find_elements(By.CSS_SELECTOR, "input.text-input, textarea.text-input")
-            if text_inputs:                                                                                                                                                                                           
-                agent_response = llm_agent.prompt(q_text)                                       
-                print("ANSWER:", agent_response)                                                                                                                                                                      
+            if text_inputs:
+                agent_response = llm_agent.prompt(q_text)
+                print("ANSWER:", agent_response)
             
             # Refresh so not stale
-            q = driver.find_elements(By.CSS_SELECTOR, "section.question")[i]
-            loop_through_elements(q, "input.text-input", fill_text, agent_response)                                                                                                                               
-            loop_through_elements(q, "textarea.text-input", fill_text, agent_response)  
+            q = [q for q in driver.find_elements(By.CSS_SELECTOR, QUESTION_SECTION_SELECTOR) if q.is_displayed()][i]
+            loop_through_elements(q, "input.text-input", fill_text, agent_response)
+            loop_through_elements(q, "textarea.text-input", fill_text, agent_response)
 
             # Group radios by questions
             radios_per_q = q.find_elements(By.CSS_SELECTOR, "input[type='radio']")
             fill_radio(radios_per_q)
+
+
 
 
         input("Press Enter to move to the next page")
