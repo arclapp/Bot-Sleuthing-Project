@@ -11,8 +11,6 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# This is a test message for Michelle to see if my push worked!
-
 ```{r}
 # Packages
 library(httr)
