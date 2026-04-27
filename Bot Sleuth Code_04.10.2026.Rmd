@@ -388,33 +388,9 @@ host_total <- # change to add mutate
 combined_results %>%
   rowwise() %>% 
        summarize(host_total = 
-                   sum(c(ipapi_hosting,ipapi_proxy,ipapi_hosting,ipquery_risk.is_tor,ipquery_risk.is_proxy,ipquery_risk.is_datacenter,freeipapi_isProxy),na.rm=T))
+                   sum(c(ipapi_hosting,ipapi_proxy,ipapi_hosting,ipquery_risk.is_tor,ipquery_risk.is_proxy,ipquery_risk.is_datacenter,freeipapi_isProxy,ipquery_risk.is_vpn),na.rm=T))
 
 combined_results$host_total <- host_total
-
-#   name  total
-#   <chr> <int>
-# 1 alex      1
-# 2 bill      2
-# 3 rob       3
-
-# VPN cols:
-#   ipquery_risk.is_vpn
-# 
-# other vars:
-#   ipquery_risk.risk_score
-```
-
-
-### Fields in APIs
-
-```{r}
-names()
-```
-
-
-```{r}
-
 ```
 
 ### Specific Names
@@ -429,15 +405,9 @@ names()
 ```{r}
 combined_results <- combined_results |>
   mutate(
-    suspicious_host_ipapi = if_else(
+    suspicious_host_ipapi_isp = if_else(
       str_detect(ipapi_isp, "Amazon|OVH|DigitalOcean|Hetzner|Linode|Hosting|HostPapa|Turkcell Internet|Europe|Korea Telecom|Rackdog|iboss|IBOSS|Ducat|OVH SAS|Zscaler|ZSCALER|Datacamp|Cloudflare|InterLIR|Lietparkas UAB|HIVELOCITY, Inc.|Sneaker Server|GigeNet|Kaopu Cloud|SAP America|RingSquared CC|HostRoyale Technologies|Ipxo|	
 Dedicated.com|PacketHub S.A.|PPPoX Pool"),TRUE, FALSE, missing = FALSE))
-
-combined_results <- combined_results |>
-  mutate(
-    suspicious_host_ipinfo = if_else(
-      str_detect(ipinfo_org, "Amazon|OVH|DigitalOcean|Hetzner|Linode|Hosting|HostPapa|Turkcell Internet|Europe|Korea Telecom|Rackdog|iboss|IBOSS|Ducat|OVH SAS|Zscaler|ZSCALER|Datacamp|Cloudflare|InterLIR|Lietparkas UAB|HIVELOCITY, Inc.|Sneaker Server|GigeNet|Kaopu Cloud|SAP America|RingSquared CC|HostRoyale Technologies|Ipxo|Dedicated.com|PacketHub S.A.|PPPoX Pool"),TRUE, FALSE, missing = FALSE))
-                     
 
 combined_results <- combined_results |>
   mutate(
@@ -445,6 +415,7 @@ combined_results <- combined_results |>
         str_detect(ipapi_org, "Amazon|OVH|DigitalOcean|Hetzner|Linode|Hosting|HostPapa|Turkcell Internet|Europe|Korea Telecom|Rackdog|iboss|IBOSS|Ducat|OVH SAS|Zscaler|ZSCALER|Datacamp|Cloudflare|InterLIR|Lietparkas UAB|HIVELOCITY, Inc.|Sneaker Server|GigeNet|Kaopu Cloud|SAP America|RingSquared CC|HostRoyale Technologies|Ipxo|	
 Dedicated.com|PacketHub S.A.|PPPoX Pool"), TRUE, FALSE, missing = FALSE))
 
+# in these data, ipapi_isp and ipapi_org seem to be the same
 
 combined_results <- combined_results |>
   mutate(
@@ -452,6 +423,11 @@ combined_results <- combined_results |>
         str_detect(ipapi_as, "Amazon|OVH|DigitalOcean|Hetzner|Linode|Hosting|HostPapa|Turkcell Internet|Europe|Korea Telecom|Rackdog|iboss|IBOSS|Ducat|OVH SAS|Zscaler|ZSCALER|Datacamp|Cloudflare|InterLIR|Lietparkas UAB|HIVELOCITY, Inc.|Sneaker Server|GigeNet|Kaopu Cloud|SAP America|RingSquared CC|HostRoyale Technologies|Ipxo|	
 Dedicated.com|PacketHub S.A.|PPPoX Pool"), TRUE, FALSE, missing = FALSE))
 
+combined_results <- combined_results |>
+  mutate(
+    suspicious_host_ipinfo = if_else(
+      str_detect(ipinfo_org, "Amazon|OVH|DigitalOcean|Hetzner|Linode|Hosting|HostPapa|Turkcell Internet|Europe|Korea Telecom|Rackdog|iboss|IBOSS|Ducat|OVH SAS|Zscaler|ZSCALER|Datacamp|Cloudflare|InterLIR|Lietparkas UAB|HIVELOCITY, Inc.|Sneaker Server|GigeNet|Kaopu Cloud|SAP America|RingSquared CC|HostRoyale Technologies|Ipxo|Dedicated.com|PacketHub S.A.|PPPoX Pool"),TRUE, FALSE, missing = FALSE))
+                    
 combined_results <- combined_results |>
   mutate(
     suspicious_host_ipquery = if_else( 
@@ -466,13 +442,35 @@ Dedicated.com|PacketHub S.A.|PPPoX Pool"),TRUE, FALSE, missing = FALSE))
 
 ```
 
-# Need to make var summing/saying # of suspicious hosts, instead of just one flag
+Creating one flagging variable across the different IP API fields:
 
+```{r}
+combined_results <- 
+combined_results %>% mutate(suspicious_host_ipapi_final = 
+                              case_when(suspicious_host_ipapi_isp == T | 
+                                        suspicious_host_ipapi_org == T |
+                                        suspicious_host_ipapi_as == T
+                                      ~ TRUE,
+                                      TRUE ~ FALSE))
+```
+
+
+```{r}
+susp_host_total <- # change to add mutate
+combined_results %>%
+  rowwise() %>% 
+       summarize(susp_host_total = 
+                   sum(c(suspicious_host_ipapi_final,suspicious_host_ipquery,suspicious_host_freeipapi),na.rm=T))
+
+combined_results$susp_host_total <- susp_host_total
+```
+
+**Need to decide what reasonable threshold would be for this - of course people can change it for themselves though**
 
 ## Suspicious Location Flagging
 
 ```{r}
-combined_results %>% select(ipapi_regionName,ipinfo_region,ipquery_location.state)
+combined_results %>% select(ipapi_regionName,ipinfo_region,ipquery_location.state,suspicious_host_ipinfo)
 
 combined_results %>% select(freeipapi_countryCode,
 ipquery_location.country_code,
@@ -506,7 +504,7 @@ partial_match <- function(a, b) {
   }, a, b)
 }
 
-test_combined_results <- combined_results %>%
+combined_results <- combined_results %>%
   mutate(
     city_match_ipapi     = partial_match(ipquery_location.city, ipapi_city),
     city_match_ipinfo    = partial_match(ipquery_location.city, ipinfo_city),
@@ -516,78 +514,80 @@ test_combined_results <- combined_results %>%
     city_match_6 = partial_match(ipinfo_city,freeipapi_cityName)
   )
 
-test_combined_results %>% select(grep("city_match",names(test_combined_results)),ipquery_location.city,ipapi_city,ipinfo_city,freeipapi_cityName)
+combined_results %>% select(grep("city_match",names(combined_results)),ipquery_location.city,ipapi_city,ipinfo_city,freeipapi_cityName)
 ```
 
 ```{r}
 city_cols <- c("ipapi_city", "ipinfo_city", "freeipapi_cityName","ipquery_location.city")
+```
 
+**TBH I really don't remember what this is doing:**
 
-ipapi_city
-ipinfo_city
-ipquery_location.city
-freeipapi_cityName
-
+```{r}
 for (col in city_cols) {
   new_col <- paste0("city_match_", col)
-  test_combined_results[[new_col]] <- partial_match(
-    test_combined_results$ipquery_location.city,
-    test_combined_results[[col]]
+  combined_results[[new_col]] <- partial_match(
+    combined_results$ipquery_location.city,
+    combined_results[[col]]
   )
 }
 ```
+
+# Under construction :-) (4-27)
+
+### This doesn't make sense because match_cols only has the four city columns, this isn't comparing across all the city match variables I just made. Or just don't remember at all what's going on and how this makes sense
 
 Flagging different match counts across the city columns:
 
 ```{r}
 # Any match across all sources
 match_cols <- paste0("city_match_", city_cols)
-test_combined_results$any_city_match <- rowSums(test_combined_results[match_cols]) > 0
+combined_results$any_city_match <- rowSums(combined_results[match_cols]) > 0
 
-test_combined_results %>% select(any_city_match, city_match_ipapi,ipquery_location.city,ipapi_city,freeipapi_cityName)
+combined_results %>% select(any_city_match, city_match_ipapi,ipquery_location.city,ipapi_city,freeipapi_cityName,ipinfo_city)
 ```
 
 ```{r}
 # 5+ (out of 6) matches across sources
-match_cols <- paste0("city_match_", city_cols)
-test_combined_results$five_city_match <- rowSums(test_combined_results[match_cols]) > 1
+combined_results$five_city_match <- rowSums(combined_results[match_cols]) > 1
 
-test_combined_results %>% select(five_city_match, city_match_ipapi,ipquery_location.city,ipapi_city,freeipapi_cityName)
-
-test_combined_results$match_cols
+combined_results %>% select(five_city_match, city_match_ipapi,ipquery_location.city,ipapi_city,freeipapi_cityName)
 ```
 
 ```{r}
 # 4+ (out of 6) matches across sources
-match_cols <- paste0("city_match_", city_cols)
-test_combined_results$four_city_match <- rowSums(test_combined_results[match_cols]) > 2
+combined_results$four_city_match <- rowSums(combined_results[match_cols]) > 2
 
-test_combined_results %>% select(grep("city_match",names(test_combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
+combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName,ipinfo_city)
 ```
 
 ```{r}
 # 3+ (out of 6) matches across sources
-match_cols <- paste0("city_match_", city_cols)
-test_combined_results$three_city_match <- rowSums(test_combined_results[match_cols]) > 3
+combined_results$three_city_match <- rowSums(combined_results[match_cols]) > 3
 
-test_combined_results %>% select(grep("city_match",names(test_combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
+combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
 ```
 
 ```{r}
 # 2+ (out of 6) matches across sources
-match_cols <- paste0("city_match_", city_cols)
-test_combined_results$two_city_match <- rowSums(test_combined_results[match_cols]) > 4
+combined_results$two_city_match <- rowSums(combined_results[match_cols]) > 4
 
-test_combined_results %>% select(grep("city_match",names(test_combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
+combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
 ```
 
 ```{r}
 # 1+ (out of 6) matches across sources
-match_cols <- paste0("city_match_", city_cols)
-test_combined_results$one_city_match <- rowSums(test_combined_results[match_cols]) > 5
+combined_results$one_city_match <- rowSums(combined_results[match_cols]) > 5
 
-test_combined_results %>% select(grep("city_match",names(test_combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
+combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
+
+
 ```
+
+```{r}
+combined_results %>% select(any_city_match:one_city_match)
+```
+
 
 #### Next steps (3/31/26)
 
@@ -684,7 +684,7 @@ table(d_ips$bot_score)
 
 # Additional Sleuthing Steps
 
-**AC note:** If we want to incorporate these remaining steps into the final code, we could add some sample open-ended data and Qualtrics RelevantID data into our sample data. For now, I'm setting it not to run.
+**AC note:**For now, I'm setting it not to run.
 
 ```{r,eval=F}
 # open text as positive (less likely to be a bot)
@@ -752,4 +752,27 @@ table(d_ips$bot_score_relid)
 table(d_ips$bot_score)
 bot_ids_relid <- d_ips %>% filter(bot_score_relid>=2)
 ```
+
+# Final Flagging
+
+**Need to add looking across all the flagging variables to assess likelihood of bot/fraud**
+
+```{r}
+combined_results <- combined_results |>
+  mutate(
+    bot_score = (host_total + susp_host_total + )
+  )
+table(d_ips$bot_score)
+
+
+combined_results <- combined_results |>
+  mutate(
+    bot_score = (suspicious_host + geo_outside_us + geo_disagree + dup_ip)
+  )
+table(d_ips$bot_score)
+
+
+
+```
+
 
