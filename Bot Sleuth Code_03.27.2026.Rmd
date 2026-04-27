@@ -414,15 +414,138 @@ ipapi_countryCode,
 ipinfo_country)
 ```
 
-# Need to standardize the country values
-
-Country code variables:
+#### Country code variables:
 
 freeipapi_countryCode
 ipquery_location
 ipapi_countryCode
 
 ipinfo_country is equivalent to the country codes for the other lookup sites.
+
+#### City variables:
+
+ipapi_city
+ipinfo_city
+ipquery_location.city
+freeipapi_cityName
+
+**Also, one example of "Chiyoda City" where it's the same but with more characters. Maybe do a grep to look for presence of strings instead**
+
+Trying to do this:
+
+### From Claude:
+
+```{r}
+# Helper: TRUE if either string contains the other (case-insensitive)
+partial_match <- function(a, b) {
+  mapply(function(x, y) {
+    if (is.na(x) | is.na(y)) return(FALSE)
+    grepl(x, y, ignore.case = TRUE) | grepl(y, x, ignore.case = TRUE)
+  }, a, b)
+}
+
+test_combined_results <- combined_results %>%
+  mutate(
+    city_match_ipapi     = partial_match(ipquery_location.city, ipapi_city),
+    city_match_ipinfo    = partial_match(ipquery_location.city, ipinfo_city),
+    city_match_freeipapi = partial_match(ipquery_location.city, freeipapi_cityName),
+  )
+
+test_combined_results %>% select(city_match_ipapi,ipquery_location.city,ipapi_city)
+```
+
+```{r}
+city_cols <- c("ipapi_city", "ipinfo_city", "freeipapi_cityName")
+
+test_combined_results <- combined_results
+
+for (col in city_cols) {
+  new_col <- paste0("city_match_", col)
+  test_combined_results[[new_col]] <- partial_match(
+    test_combined_results$ipquery_location.city,
+    test_combined_results[[col]]
+  )
+}
+
+# Any match across all sources
+match_cols <- paste0("city_match_", city_cols)
+test_combined_results$any_city_match <- rowSums(test_combined_results[match_cols]) > 0
+```
+
+
+#### trying taking the first city col and saving as string vector, then putting that into str_detect
+
+```{r}
+test_combined_results <- combined_results
+
+test_combined_results <- 
+test_combined_results %>% 
+mutate(test_city_log1 = 
+         (stringi::stri_detect(test_combined_results$ipapi_city, fixed = city_v))) %>% 
+  mutate(test_city_log2 = 
+                 (stringi::stri_detect(test_combined_results$ipinfo_city, fixed = city_v))) %>% 
+  mutate(test_city_log3 = 
+                 (stringi::stri_detect(test_combined_results$freeipapi_cityName, fixed = city_v)))
+
+test_combined_results %>% select(test_city_log1,ipquery_location.city,ipapi_city)
+
+test_combined_results <- 
+test_combined_results %>% 
+mutate(test_city_log1 = 
+         (stringi::stri_detect(test_combined_results$ipapi_city, regex = city_v))) %>% 
+  mutate(test_city_log2 = 
+                 (stringi::stri_detect(test_combined_results$ipinfo_city, regex = city_v))) %>% 
+  mutate(test_city_log3 = 
+                 (stringi::stri_detect(test_combined_results$freeipapi_cityName, regex = city_v)))
+
+test_combined_results <- combined_results
+
+test_combined_results <- 
+test_combined_results %>% 
+mutate(test_city_log1 = 
+         (stringi::stri_detect_regex(test_combined_results$ipapi_city, city_v,case_insensitive=T))) %>% 
+  mutate(test_city_log2 = 
+                 (stringi::stri_detect_regex(test_combined_results$ipinfo_city, city_v, case_insensitive=T))) %>% 
+  mutate(test_city_log3 = 
+                 (stringi::stri_detect_regex(test_combined_results$freeipapi_cityName, city_v,case_insensitive=T)))
+
+test_combined_results %>% select(test_city_log1,ipquery_location.city,ipapi_city,test_city_log2,ipinfo_city,test_city_log3,freeipapi_cityName)
+
+city_v <- data.frame(combined_results$ipquery_location.city)
+
+# city_v <- 
+# city_v %>% mutate(start = "[",
+#                   end = "]")
+
+city_v <- city_v %>% mutate(dollar = "$")
+
+city_v <- 
+city_v %>% mutate(
+combined_results.ipquery_location.city = paste(combined_results.ipquery_location.city, dollar, sep=""))
+
+stringi::stri_detect_regex(str = test_combined_results$ipapi_city, pattern = city_v$combined_results.ipquery_location.city,case_insensitive=T)
+
+test_combined_results %>% select(test_city_log1,ipquery_location.city,ipapi_city,test_city_log2,ipinfo_city,test_city_log3,freeipapi_cityName)
+
+# test_combined_results %>% 
+# mutate(test_city_detect = case_when(test_city_log ~ TRUE ~ 1,
+#                                     test_city_log ~ FALSE ~ 0,
+#                                     TRUE ~ NULL))
+```
+
+
+
+#### Next steps (3/31/26)
+
+1) See if there's any of the basic versions of the stringi functions that can be more flexible in matching strings
+
+2) If not, see if I can use regex to be more specific about this. A way to do this could be to concatanate/paste regex symbols that help with this into the string vectors.
+
+**Note: The "fixed" argument here in stri_detect() is searching for the presence of a pattern present in the first vector within the second vector. This means that if the first vector contains a shorter name (e.g., Chiyoda) that is contained in a longer name in the second vector (e.g., Chiyoda City), they will be properly matched. However, if the order of the vectors is switched, they will not be properly matched (since "Chiyoda City" is not contained within "Chiyoda").
+
+**This might be a good approach for the other location data, too, becasue with the output logical vector I can more easily sum across to create vars indicating the n of matches between the columns**
+
+--------------------
 
 ```{r}
 # suspicious location flag
@@ -456,45 +579,28 @@ isp_counts
 
 **AC note:** A lot of the regions differ and are getting flagged. This is okay, but maybe should create count variables indicating whether there are discrepancies between 2 of the region variables, or all 3, etc. Either way, should definitely note that people should use caution with this.
 
-**Also, one example of "Chiyoda City" where it's the same but with more characters. Maybe do a grep to look for presence of strings instead**
+Trying to do this:
 
-### Without flagging by city
+```{r}
+combined_results %>% mutate(geo_disagree_city_1 = case_when(ipapi_city != ipinfo_city ~ 1,
+                                                            TRUE ~ 0))
+                              
+                              
+                              
+                              
+                      #         (
+                      # ipapi_city != ipinfo_city | 
+                      # ipapi_city != ipquery_location.city | 
+                      # ipinfo_city != ipquery_location.city |
+                      #   freeipapi_cityName != ipapi_city |
+                      #   freeipapi_cityName != ipinfo_city |
+                      #   freeipapi_cityName != ipquery_location.city))
 
-```{r,eval=F}
-# suspicious location flag
-combined_results <- combined_results |>
-  mutate(
-    geo_outside_us = (ipapi_country != "United States" | ipinfo_country != "US" | ipquery_location.country != "United States"),
-    geo_disagree = (ipapi_regionName != ipinfo_region |
-                      ipapi_regionName != ipquery_location.state | # seems kind of equivalent but not quite the same
-                                            ipinfo_region != ipquery_location.state) # seems kind of equivalent but not quite the same
-    )
-
-combined_results$geo_disagree # in this instance, all of these are getting flagged
-
-isp_counts <- bind_rows(
-  combined_results |> count(ipapi_isp,  name = "n") |> rename(isp = ipapi_isp) |> mutate(source = "ipapi"),
-  combined_results |> count(ipinfo_org, name = "n") |> rename(isp = ipinfo_org) |> mutate(source = "ipinfo")
-)
-isp_counts
 ```
-Most are still getting flagged
 
-### Without flagging by region
 
-```{r,eval=F}
-# suspicious location flag
-combined_results <- combined_results |>
-  mutate(
-    geo_outside_us = (ipapi_country != "United States" | ipinfo_country != "US" | ipquery_location.country != "United States")) # seems kind of equivalent but not quite the same
-
-combined_results$geo_disagree # most still getting flagged
-
-isp_counts <- bind_rows(
-  combined_results |> count(ipapi_isp,  name = "n") |> rename(isp = ipapi_isp) |> mutate(source = "ipapi"),
-  combined_results |> count(ipinfo_org, name = "n") |> rename(isp = ipinfo_org) |> mutate(source = "ipinfo")
-)
-isp_counts
+```{r}
+combined_results %>% filter(grepl("Hiroshima", ipapi_city))
 ```
 
 ```{r}
