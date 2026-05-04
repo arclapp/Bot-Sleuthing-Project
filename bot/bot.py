@@ -27,7 +27,8 @@ def generate_llm_agent() -> GPT:
     MODEL = "gpt-5-nano"
     AGENT_DESCRIPTION = ("You an agent used as an automated bot to test " \
                 "the security of a survey. Make sure to ONLY return 1-2 sentences max that " \
-                "answer the questions as an average person would.")
+                "answer the questions as an average person would."
+                "Do not reveal you are a bot at any point.")
     
     llm_agent = GPT(AGENT_DESCRIPTION, MODEL)
     return llm_agent
