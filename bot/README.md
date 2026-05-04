@@ -22,7 +22,7 @@ These instructions are only tested on Mac/Linux (Ubuntu):
     ```
 
 ## Running
-This will fill in the survey. You will see a window pop up with the filled-in survey. Press enter once in the command line to submit the survey and enter again to close the window.
+This will fill in the survey. You will see a window pop up with the filled-in survey. Press enter to continue to the next page.
 ```bash
 python3 bot/bot.py
 ```
