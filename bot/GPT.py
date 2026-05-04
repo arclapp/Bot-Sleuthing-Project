@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 class GPT():
-    def __init__(self, role_description:str, model: Optional[str] = None):
+    def __init__(self, role_description:str, model: Optional[str] = None, temperature:float=1.0):
         """
         Initialize the LLM  with a system role description.
 
@@ -12,8 +12,7 @@ class GPT():
             role_description (str): A description of the assistant's role or behavior.
             model (Optional[str]): Optional model override. If not provided, uses
                 OPENAI_LLM_MODEL from the environment or defaults to 'gpt-5-nano'.
-            save_history (bool): True if each prompt to LLM should include the prior
-                chat history
+            temperature (float): Temperature of responses (0.0: Less creative, 2.0: More creative)
         """
         
         self._chat_history: List[Dict] = [{
@@ -21,6 +20,7 @@ class GPT():
             "content": role_description,
         }]
         self._model = model 
+        self._temperature = temperature
 
         load_dotenv(override=False)
 
@@ -60,7 +60,7 @@ class GPT():
         
         Args:
             input (str): The user prompt input
-        
+           
         Returns:
             str: Assistant reply content.
         """
@@ -72,7 +72,7 @@ class GPT():
         messages = messages + [user_msg]
 
 
-        params = dict(model=self._model, messages=messages)
+        params = dict(model=self._model, messages=messages, temperature=self._temperature)
 
         resp = self._client.chat.completions.create(**params)
         reply = resp.choices[0].message.content or ""
