@@ -518,27 +518,7 @@ combined_results <- combined_results %>%
 combined_results %>% select(grep("city_match",names(combined_results)),ipquery_location.city,ipapi_city,ipinfo_city,freeipapi_cityName)
 ```
 
-```{r,eval=F}
-city_cols <- c("ipapi_city", "ipinfo_city", "freeipapi_cityName","ipquery_location.city")
-```
-
-**TBH I really don't remember what this is doing:**
-
-```{r,eval=F}
-for (col in city_cols) {
-  new_col <- paste0("city_match_", col) # create new vars indicating city matches
-  combined_results[[new_col]] <- partial_match( # in new cols, flag partial matches between ipquery_location.city and all other city vars
-    combined_results$ipquery_location.city,
-    combined_results[[col]]
-  )
-}
-```
-
-# Under construction :-) (4-27)
-
-
-
-Flagging different match counts across the city columns:
+Creating a var showing number of pairwise matches:
 
 ```{r}
 match_cols <- combined_results %>% select(city_match_1:city_match_6)
@@ -547,55 +527,9 @@ combined_results$city_match_n <- combined_results %>% select(city_match_1:city_m
 combined_results %>% select(city_match_n, city_match_1:city_match_6)
 ```
 
-```{r}
-# Any match across all sources
-match_cols <- paste0("city_match_", city_cols)
-combined_results$any_city_match <- rowSums(combined_results[match_cols]) > 0
-```
+**Not sure what to do with these counts in the final bot flagging process.**
 
-```{r}
-# 5+ (out of 6) matches across sources
-combined_results$five_city_match <- rowSums(combined_results[match_cols]) > 1
-
-combined_results %>% select(five_city_match, city_match_ipapi,ipquery_location.city,ipapi_city,freeipapi_cityName)
-```
-
-```{r}
-# 4+ (out of 6) matches across sources
-combined_results$four_city_match <- rowSums(combined_results[match_cols]) > 2
-
-combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName,ipinfo_city)
-```
-
-```{r}
-# 3+ (out of 6) matches across sources
-combined_results$three_city_match <- rowSums(combined_results[match_cols]) > 3
-
-combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
-```
-
-```{r}
-# 2+ (out of 6) matches across sources
-combined_results$two_city_match <- rowSums(combined_results[match_cols]) > 4
-
-combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
-```
-
-```{r}
-# 1+ (out of 6) matches across sources
-combined_results$one_city_match <- rowSums(combined_results[match_cols]) > 5
-
-combined_results %>% select(grep("city_match",names(combined_results)),ipinfo_city,ipquery_location.city,ipapi_city,freeipapi_cityName)
-
-
-```
-
-```{r}
-combined_results %>% select(any_city_match:one_city_match)
-```
-
-
-#### Next steps (3/31/26)
+#### Next steps 
 
 Write code to apply same approach as for the cities above to region flagging.
 
