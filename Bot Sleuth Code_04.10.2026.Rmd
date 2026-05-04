@@ -4,7 +4,7 @@ author: "Abbie Clapp and Michelle Marji"
 date: "2026-03-11"
 output: html_document
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -494,7 +494,6 @@ ipquery_location.city
 freeipapi_cityName
 
 ### From Claude:
-
 ```{r}
 # Helper: TRUE if either string contains the other (case-insensitive)
 partial_match <- function(a, b) {
@@ -503,12 +502,14 @@ partial_match <- function(a, b) {
     grepl(x, y, ignore.case = TRUE) | grepl(y, x, ignore.case = TRUE)
   }, a, b)
 }
+```
 
+```{r}
 combined_results <- combined_results %>%
   mutate(
-    city_match_ipapi     = partial_match(ipquery_location.city, ipapi_city),
-    city_match_ipinfo    = partial_match(ipquery_location.city, ipinfo_city),
-    city_match_freeipapi = partial_match(ipquery_location.city, freeipapi_cityName),
+    city_match_1     = partial_match(ipquery_location.city, ipapi_city),
+    city_match_2    = partial_match(ipquery_location.city, ipinfo_city),
+    city_match_3 = partial_match(ipquery_location.city, freeipapi_cityName),
     city_match_4 = partial_match(ipapi_city, ipinfo_city),
     city_match_5 = partial_match(ipapi_city,freeipapi_cityName),
     city_match_6 = partial_match(ipinfo_city,freeipapi_cityName)
@@ -517,16 +518,16 @@ combined_results <- combined_results %>%
 combined_results %>% select(grep("city_match",names(combined_results)),ipquery_location.city,ipapi_city,ipinfo_city,freeipapi_cityName)
 ```
 
-```{r}
+```{r,eval=F}
 city_cols <- c("ipapi_city", "ipinfo_city", "freeipapi_cityName","ipquery_location.city")
 ```
 
 **TBH I really don't remember what this is doing:**
 
-```{r}
+```{r,eval=F}
 for (col in city_cols) {
-  new_col <- paste0("city_match_", col)
-  combined_results[[new_col]] <- partial_match(
+  new_col <- paste0("city_match_", col) # create new vars indicating city matches
+  combined_results[[new_col]] <- partial_match( # in new cols, flag partial matches between ipquery_location.city and all other city vars
     combined_results$ipquery_location.city,
     combined_results[[col]]
   )
@@ -535,16 +536,21 @@ for (col in city_cols) {
 
 # Under construction :-) (4-27)
 
-### This doesn't make sense because match_cols only has the four city columns, this isn't comparing across all the city match variables I just made. Or just don't remember at all what's going on and how this makes sense
+
 
 Flagging different match counts across the city columns:
+
+```{r}
+match_cols <- combined_results %>% select(city_match_1:city_match_6)
+combined_results$city_match_n <- combined_results %>% select(city_match_1:city_match_6) %>% rowSums()
+
+combined_results %>% select(city_match_n, city_match_1:city_match_6)
+```
 
 ```{r}
 # Any match across all sources
 match_cols <- paste0("city_match_", city_cols)
 combined_results$any_city_match <- rowSums(combined_results[match_cols]) > 0
-
-combined_results %>% select(any_city_match, city_match_ipapi,ipquery_location.city,ipapi_city,freeipapi_cityName,ipinfo_city)
 ```
 
 ```{r}
