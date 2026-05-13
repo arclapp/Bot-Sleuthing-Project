@@ -4,7 +4,7 @@ author: "Abbie Clapp and Michelle Marji"
 date: "2026-03-11"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -363,6 +363,8 @@ combined_results
 ```
 ## Will want to note for users of the code that they'll likely need to update this based on their data - we are just including suspicious hosts we commonly see. Or maybe shouldn't include specific hosts at all? Not sure
 
+**AC Note**: Still getting some missing data for free IPAPI even with sys sleep?
+
 ## Suspicious Host Flagging
 
 **Note:** I looked into anycast, but not fully sure if that's something that would be suspicious. Sounds like it involves multiple servers showing up as the same IP address but not sure if that's something people would be using for suss survey things.
@@ -478,23 +480,25 @@ ipapi_countryCode,
 ipinfo_country)
 ```
 
-#### Country code variables:
+## Geographic Mismatch Flagging
 
-freeipapi_countryCode
-ipquery_location
-ipapi_countryCode
+### Countries
 
-ipinfo_country is equivalent to the country codes for the other lookup sites.
+Here, since the premise is a study recruiting participants in Japan, we are just checking for *any* country codes listed as outside Japan.
 
-#### City variables:
-
-ipapi_city
-ipinfo_city
-ipquery_location.city
-freeipapi_cityName
-
-### From Claude:
 ```{r}
+combined_results <- combined_results |>
+  mutate(
+    geo_outside_japan = (freeipapi_countryCode != "JP" | ipquery_location.country_code != "JP" | ipapi_countryCode != "JP" | ipinfo_country != "JP"))
+combined_results$geo_outside_japan
+```
+
+### Cities
+
+For regions and cities, since there is a more reasonable degree of error here, we will compare pairwise results between each API and count the number of mismatches. 
+
+```{r}
+# from Claude
 # Helper: TRUE if either string contains the other (case-insensitive)
 partial_match <- function(a, b) {
   mapply(function(x, y) {
@@ -503,6 +507,7 @@ partial_match <- function(a, b) {
   }, a, b)
 }
 ```
+
 
 ```{r}
 combined_results <- combined_results %>%
@@ -529,35 +534,35 @@ combined_results %>% select(city_match_n, city_match_1:city_match_6)
 
 **Not sure what to do with these counts in the final bot flagging process.**
 
-#### Next steps 
-
-Write code to apply same approach as for the cities above to region flagging.
-
---------------------
+### Regions
 
 ```{r}
-# suspicious location flag
-combined_results <- combined_results |>
+combined_results <- combined_results %>%
   mutate(
-    geo_outside_japan = (freeipapi_countryCode != "JP" | ipquery_location.country_code != "JP" | ipapi_countryCode != "JP" | ipinfo_country != "JP"),
-    geo_disagree_region = (ipapi_regionName != ipinfo_region |
-                      ipapi_regionName != ipquery_location.state | # seems kind of equivalent but not quite the same
-                                            ipinfo_region != ipquery_location.state),
-  # seems kind of equivalent but not quite the same
-  geo_disagree_city = (
-                      ipapi_city != ipinfo_city | 
-                      ipapi_city != ipquery_location.city | 
-                      ipinfo_city != ipquery_location.city |
-                        freeipapi_cityName != ipapi_city |
-                        freeipapi_cityName != ipinfo_city |
-                        freeipapi_cityName != ipquery_location.city))
+    region_match_1     = partial_match(ipapi_regionName, ipinfo_region),
+    region_match_2    = partial_match(ipapi_regionName, ipquery_location.state),
+    region_match_3 = partial_match(ipapi_regionName, freeipapi_regionName),
+    region_match_4 = partial_match(ipinfo_region, ipquery_location.state),
+    region_match_5 = partial_match(ipinfo_region,freeipapi_regionName),
+    region_match_6 = partial_match(ipquery_location.state,freeipapi_regionName )
+  )
 
-combined_results %>% select(geo_outside_japan,ipapi_country,ipinfo_country,ipquery_location.country) # in this instance, all of these are getting flagged
+combined_results %>% select(grep("region_match",names(combined_results)),ipapi_regionName,ipinfo_region,freeipapi_regionName,ipquery_location.state)
+```
 
-combined_results %>% select(geo_disagree_region,ipapi_regionName,ipinfo_region,ipquery_location.state)
+Creating a var showing number of pairwise matches:
 
-combined_results %>% select(geo_disagree_city,ipapi_city,ipinfo_city,ipquery_location.city,freeipapi_cityName)
+```{r}
+match_cols <- combined_results %>% select(region_match_1:region_match_6)
+combined_results$region_match_n <- combined_results %>% select(region_match_1:region_match_6) %>% rowSums()
 
+combined_results %>% select(region_match_n, region_match_1:region_match_6)
+```
+
+
+## Duplicate IP Addresses
+
+```{r}
 isp_counts <- bind_rows(
   combined_results |> count(ipapi_isp,  name = "n") |> rename(isp = ipapi_isp) |> mutate(source = "ipapi"),
   combined_results |> count(ipinfo_org, name = "n") |> rename(isp = ipinfo_org) |> mutate(source = "ipinfo")
@@ -565,31 +570,6 @@ isp_counts <- bind_rows(
 isp_counts
 ```
 
-**AC note:** A lot of the regions differ and are getting flagged. This is okay, but maybe should create count variables indicating whether there are discrepancies between 2 of the region variables, or all 3, etc. Either way, should definitely note that people should use caution with this.
-
-Trying to do this:
-
-```{r}
-combined_results %>% mutate(geo_disagree_city_1 = case_when(ipapi_city != ipinfo_city ~ 1,
-                                                            TRUE ~ 0))
-                              
-                              
-                              
-                              
-                      #         (
-                      # ipapi_city != ipinfo_city | 
-                      # ipapi_city != ipquery_location.city | 
-                      # ipinfo_city != ipquery_location.city |
-                      #   freeipapi_cityName != ipapi_city |
-                      #   freeipapi_cityName != ipinfo_city |
-                      #   freeipapi_cityName != ipquery_location.city))
-
-```
-
-
-```{r}
-combined_results %>% filter(grepl("Hiroshima", ipapi_city))
-```
 
 ```{r}
 # join to original data
@@ -605,7 +585,13 @@ d_ips  <- d_ips  |>
   add_count(ip_address, name = "ip_count") |>
   mutate(dup_ip = ip_count > 1)
 table(d_ips$dup_ip)
+```
 
+# Calculate Bot Liklihood Score
+
+**5/13: Need to update to add new pairwise counts for region & city masmatches, and transform those in some way**
+
+```{r}
 # check for clustering around the same finish time
 # note: doesn't seem super useful
 # time_clusters <- d_ips |>
