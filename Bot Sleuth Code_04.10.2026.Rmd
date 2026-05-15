@@ -308,8 +308,8 @@ results_freeipapi <- purrr::map_dfr(chunks, \(ch) {
       warning("Batch failed: ", conditionMessage(e))
       tibble(query = ch, error = conditionMessage(e))
     }
-    # ,
-    #     Sys.sleep(120)
+    ,
+        Sys.sleep(120)
   )
 })
 results_freeipapi
@@ -363,8 +363,6 @@ combined_results
 ```
 ## Will want to note for users of the code that they'll likely need to update this based on their data - we are just including suspicious hosts we commonly see. Or maybe shouldn't include specific hosts at all? Not sure
 
-**AC Note**: Still getting some missing data for free IPAPI even with sys sleep?
-
 ## Suspicious Host Flagging
 
 **Note:** I looked into anycast, but not fully sure if that's something that would be suspicious. Sounds like it involves multiple servers showing up as the same IP address but not sure if that's something people would be using for suss survey things.
@@ -398,9 +396,6 @@ combined_results$host_total <- host_total
 ### Specific Names
 
 **Note:** Could update these based on what we see with the VPNs/bot, but then obviously it's going to be effective lol. Not sure how to approach this. The ones I have here are just ones I've seen in datasets I've worked with, but I don't have any strong evidence that they're problematic.
-
-
-# add lines for each of the IP lookups
 
 # ideally change to make a loop going across all the ISP vars /more concise
 
@@ -454,35 +449,33 @@ combined_results %>% mutate(suspicious_host_ipapi_final =
                                         suspicious_host_ipapi_as == T
                                       ~ TRUE,
                                       TRUE ~ FALSE))
+
+combined_results$suspicious_host_ipapi_final
+combined_results$suspicious_host_ipquery
+combined_results$suspicious_host_freeipapi
 ```
 
-
 ```{r}
-susp_host_total <- # change to add mutate
+# susp_host_total <- # change to add mutate
+# combined_results %>%
+#   rowwise() %>% 
+#        summarize(susp_host_total = 
+#                    sum(c(suspicious_host_ipapi_final,suspicious_host_ipquery,suspicious_host_freeipapi),na.rm=T))
+
+
+combined_results <-
 combined_results %>%
   rowwise() %>% 
-       summarize(susp_host_total = 
-                   sum(c(suspicious_host_ipapi_final,suspicious_host_ipquery,suspicious_host_freeipapi),na.rm=T))
+  mutate(susp_host_total = sum(c(suspicious_host_ipapi_final,suspicious_host_ipquery,suspicious_host_freeipapi),na.rm=T))
 
-combined_results$susp_host_total <- susp_host_total
+combined_results %>% select(susp_host_total,suspicious_host_ipapi_final,suspicious_host_ipquery,suspicious_host_freeipapi)
 ```
 
 **Need to decide what reasonable threshold would be for this - of course people can change it for themselves though**
 
 ## Suspicious Location Flagging
 
-```{r}
-combined_results %>% select(ipapi_regionName,ipinfo_region,ipquery_location.state,suspicious_host_ipinfo)
-
-combined_results %>% select(freeipapi_countryCode,
-ipquery_location.country_code,
-ipapi_countryCode,
-ipinfo_country)
-```
-
-## Geographic Mismatch Flagging
-
-### Countries
+### Incorrect Country
 
 Here, since the premise is a study recruiting participants in Japan, we are just checking for *any* country codes listed as outside Japan.
 
@@ -493,7 +486,7 @@ combined_results <- combined_results |>
 combined_results$geo_outside_japan
 ```
 
-### Cities
+### Mismatched Cities
 
 For regions and cities, since there is a more reasonable degree of error here, we will compare pairwise results between each API and count the number of mismatches. 
 
@@ -526,7 +519,6 @@ combined_results %>% select(grep("city_match",names(combined_results)),ipquery_l
 Creating a var showing number of pairwise matches:
 
 ```{r}
-match_cols <- combined_results %>% select(city_match_1:city_match_6)
 combined_results$city_match_n <- combined_results %>% select(city_match_1:city_match_6) %>% rowSums()
 
 combined_results %>% select(city_match_n, city_match_1:city_match_6)
@@ -534,7 +526,7 @@ combined_results %>% select(city_match_n, city_match_1:city_match_6)
 
 **Not sure what to do with these counts in the final bot flagging process.**
 
-### Regions
+### Mismatched Regions
 
 ```{r}
 combined_results <- combined_results %>%
@@ -553,7 +545,6 @@ combined_results %>% select(grep("region_match",names(combined_results)),ipapi_r
 Creating a var showing number of pairwise matches:
 
 ```{r}
-match_cols <- combined_results %>% select(region_match_1:region_match_6)
 combined_results$region_match_n <- combined_results %>% select(region_match_1:region_match_6) %>% rowSums()
 
 combined_results %>% select(region_match_n, region_match_1:region_match_6)
@@ -562,21 +553,34 @@ combined_results %>% select(region_match_n, region_match_1:region_match_6)
 
 ## Duplicate IP Addresses
 
+### ISP Names
+
+# AC note: not fully sure how to incorporate these. but, a way to automate this could be to calculate these counts, then feed in the ISP names with counts above a certain threshold into the previous code where we're flagging specific names. ofc, that assumes that ISP names that occur frequently must be fraudulent, but for our SONA data where it will be UW for everyone that's not the case lol. or, might have to remove this from the code, but put it as a suggestion for people to look at as a supplementary thing - but it seems important for bots.
+
 ```{r}
 isp_counts <- bind_rows(
-  combined_results |> count(ipapi_isp,  name = "n") |> rename(isp = ipapi_isp) |> mutate(source = "ipapi"),
-  combined_results |> count(ipinfo_org, name = "n") |> rename(isp = ipinfo_org) |> mutate(source = "ipinfo")
+  combined_results |> count(ipapi_isp,  name = "n") |> rename(isp = ipapi_isp) |> mutate(source = "ipapi_isp"),
+  combined_results |> count(ipinfo_org, name = "n") |> rename(isp = ipinfo_org) |> mutate(source = "ipinfo_org"),
+    combined_results |> count(ipapi_org, name = "n") |> rename(isp = ipapi_org) |> mutate(source = "ipapi_org"),
+      combined_results |> count(ipapi_as, name = "n") |> rename(isp = ipapi_as) |> mutate(source = "ipapi_as"),
+        combined_results |> count(ipquery_isp.isp, name = "n") |> rename(isp = ipquery_isp.isp) |> mutate(source = "ipquery_isp"),
+          combined_results |> count(freeipapi_asnOrganization, name = "n") |> rename(isp = freeipapi_asnOrganization) |> mutate(source = "freeipapi_asn")
 )
 isp_counts
+
+
+# ipapi_isp,ipapi_org,ipapi_as,ipinfo_org,ipquery_isp.isp,freeipapi_asnOrganization
 ```
 
+**Add code taking ISP names for col n > some threshold (5?) and putting them into a vector, then flagging any cases in the dataset where any ISP names contain any string that vector**
+
+### IP Addresses
 
 ```{r}
 # join to original data
 d_ips <- ip_locations_raw |>
   mutate(ip_address = as.character(ip_address) |> str_trim()) |>
   left_join(combined_results, by = c("ip_address" = "query"))
-d_ips
 ```
 
 ```{r}
@@ -587,9 +591,9 @@ d_ips  <- d_ips  |>
 table(d_ips$dup_ip)
 ```
 
-# Calculate Bot Liklihood Score
+## Completion Times
 
-**5/13: Need to update to add new pairwise counts for region & city masmatches, and transform those in some way**
+## probably add this back in
 
 ```{r}
 # check for clustering around the same finish time
@@ -601,57 +605,13 @@ table(d_ips$dup_ip)
 
 # bot suspicion score
 # note: I would add qualtrics relevantID/recaptcha and open-ended response flags to this (if available in your data)
-d_ips <- d_ips |>
-  mutate(
-    bot_score = (suspicious_host + geo_outside_us + geo_disagree + dup_ip)
-  )
-table(d_ips$bot_score)
 ```
 
-# Additional Sleuthing Steps
+# Qualtrics RelevantID Data
 
 **AC note:**For now, I'm setting it not to run.
 
 ```{r,eval=F}
-# open text as positive (less likely to be a bot)
-
-## MM's version:
-# d_ips <- d_ips |>
-#   mutate(
-#     n_open_text = rowSums(across(
-#       c(park_do_5_text, metastereotype_8_text, stereotypes_8_text,
-#         activities_do, activities_where, city_state, us_zip_code,
-#         profession, feedback, free_stereotypes, free_stereotype_you,
-#         soc_stereotypes_8_text, education_10_text),
-#       ~ !is.na(.x) & .x != ""
-#     ))
-#   )
-
-## AC's version (with OE variables from SES Data)
-## do something else with this part? should this be added to bot score?
-d_ips <- d_ips |>
-  mutate(
-    n_open_text = rowSums(across(
-      c(ethnicity_5_text,
-        gender_open,
-        formative_yrs,
-        political_orient_1,
-        sex_orient_open,
-        comments),
-      ~ !is.na(.x) & .x != ""
-    ))
-  )
-table(d_ips$n_open_text)
-
-# AC: examine responses with 0 blank open-ended Qs
-# **all of these response with 0 blank OEs either were screened out or otherwise did not finish**
-# doesn't seem super useful
-d_ips %>% filter(n_open_text==0) %>% select(ip_address,bot_score,suspicious_host,geo_outside_us,geo_disagree,dup_ip)
-d_ips %>% filter(is.na(bot_score))
-d_ips %>% filter(n_open_text>=1 & bot_score==0) 
-d_ips %>% filter(n_open_text>=1 & bot_score<2) 
-table(d_ips$n_open_text)
-
 ### iii. Qualtrics bot flagging tools
 
 # RelevantID fraud score
@@ -679,26 +639,62 @@ table(d_ips$bot_score)
 bot_ids_relid <- d_ips %>% filter(bot_score_relid>=2)
 ```
 
-# Final Flagging
+# Calculate Bot Liklihood Score
+
+## Transform Geo Mismatch Data
+
+**5/13: Need to update to add new pairwise counts for region & city masmatches, and transform those in some way**
+
+```{r}
+d_ips$city_match_n # theoretically ranges 0-6 (only 0-3 in these data)
+d_ips$region_match_n # ranges 0-6
+```
+
+
+Transforming/weighting these counts to range 0-3 instead of 0-6
+
+```{r}
+d_ips <- 
+d_ips %>% mutate(city_match_n_final = 
+                   case_when(city_match_n == 6 ~ 3,
+                             city_match_n == 5 ~ 2.5,
+                             city_match_n == 4 ~ 2,
+                             city_match_n == 3 ~ 1.5,
+                             city_match_n == 2 ~ 1,
+                             city_match_n == 1 ~ 0.5,
+                             TRUE ~ city_match_n
+                             ))
+d_ips %>% select(city_match_n,city_match_n_final)
+```
+
+```{r}
+d_ips <- 
+d_ips %>% mutate(region_match_n_final = 
+                   case_when(region_match_n == 6 ~ 3,
+                             region_match_n == 5 ~ 2.5,
+                             region_match_n == 4 ~ 2,
+                             region_match_n == 3 ~ 1.5,
+                             region_match_n == 2 ~ 1,
+                             region_match_n == 1 ~ 0.5,
+                             TRUE ~ region_match_n
+                             ))
+d_ips %>% select(region_match_n,region_match_n_final)
+```
+
 
 **Need to add looking across all the flagging variables to assess likelihood of bot/fraud**
 
 ```{r}
-combined_results <- combined_results |>
+d_ips <- d_ips |>
+  rowwise() |>
   mutate(
-    bot_score = (host_total + susp_host_total + )
+    bot_score = sum(susp_host_total + geo_outside_japan + city_match_n_final + region_match_n_final + dup_ip)
   )
 table(d_ips$bot_score)
-
-
-combined_results <- combined_results |>
-  mutate(
-    bot_score = (suspicious_host + geo_outside_us + geo_disagree + dup_ip)
-  )
-table(d_ips$bot_score)
-
-
-
+d_ips %>% select(bot_score,susp_host_total, geo_outside_japan, city_match_n_final, region_match_n_final, dup_ip)
 ```
 
+# Screen bots
+
+**Need to pick a threshold for bot scores, and then screen them out**
 
